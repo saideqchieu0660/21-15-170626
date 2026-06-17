@@ -42,6 +42,10 @@ import Agent3Widget from "./components/Agent3Widget";
 import { Keyboard, Timer } from "lucide-react";
 import { DeepWorkTimer } from "./components/DeepWorkTimer";
 
+export function cn(...classes: (string | undefined | null | false)[]) {
+  return classes.filter(Boolean).join(' ');
+}
+
 const GreekSunMoonIcon = ({ isDark, className }: { isDark: boolean, className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className={`will-change-transform ${className}`}>
     {isDark ? (
