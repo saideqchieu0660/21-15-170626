@@ -1,8 +1,7 @@
-const CACHE_NAME = 'henosis-root-v4';
-const DYNAMIC_CACHE = 'henosis-dynamic-v4';
+const CACHE_NAME = 'henosis-root-v5';
+const DYNAMIC_CACHE = 'henosis-dynamic-v5';
 
-// 2. ASSET CACHING & VITE HASHES: 
-// Baseline assets to cache immediately upon install
+// 1. ASSET CACHING: Baseline assets ONLY. No dynamic Vite hashes here to prevent install aborts.
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -10,7 +9,6 @@ const STATIC_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  // Force the new service worker to become the active service worker immediately
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -27,14 +25,11 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // 3. CACHE CLEANUP SAFETY:
   event.waitUntil(
-    // Take control of all clients immediately without requiring a browser refresh
     self.clients.claim().then(() => {
       return caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
-            // Delete any cache that doesn't match our current cache names
             if (cacheName !== CACHE_NAME && cacheName !== DYNAMIC_CACHE) {
               console.log('[SW] Deleting old offline cache version:', cacheName);
               return caches.delete(cacheName);
@@ -46,16 +41,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Listener for dynamic frontend registration script to pass the correct build manifest assets
+// Listener for dynamic frontend registration script (proactive cache of runtime chunks)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'CACHE_ASSETS') {
     const assets = event.data.assets;
     if (Array.isArray(assets)) {
       caches.open(CACHE_NAME).then((cache) => {
         console.log('[SW] Proactively caching active DOM assets from Vite build...');
-        
-        // We use fetch manually per asset instead of cache.addAll
-        // because if one optional asset fails, cache.addAll will fail the entire batch.
         assets.forEach(asset => {
           cache.match(asset).then(cached => {
             if (!cached) {
@@ -63,8 +55,8 @@ self.addEventListener('message', (event) => {
                  if (response.ok) {
                    cache.put(asset, response);
                  }
-               }).catch(e => console.warn(`[SW] Optional proactive asset cache failed for ${asset}:`, e));
-            }
+               }).catch(e => console.warn(`[SW] Proactive cache failed for ${asset}:`, e));
+             }
           });
         });
       });
@@ -76,7 +68,6 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Bypass API requests, external Google identity services, and Firebase endpoints
-  // We NEVER want to offline-cache raw API requests or mutations
   if (
     url.pathname.startsWith('/api/') || 
     url.hostname.includes('googleapis.com') ||
@@ -88,68 +79,48 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 1. THE NAVIGATE FALLBACK TRAP & 4. STATE ROUNTING REHYDRATION
-  // Intercept every SPA direct navigation request (URL typing, F5, subroutes)
+  // 2. RESILIENT OFFLINE NAVIGATIONAL CACHING (Network-First Fallback-to-Index)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       (async () => {
         try {
-          // Attempt network fetch first to ensure they get the freshest deploy when online
           const networkResponse = await fetch(event.request);
-          
           if (!networkResponse || (!networkResponse.ok && networkResponse.type !== 'opaque')) {
             throw new Error(`Server returned non-OK status: ${networkResponse?.status}`);
           }
-          
-          // Optional: Update the cached index.html so it stays fresh
-          if (networkResponse && networkResponse.status === 200) {
-            const cache = await caches.open(CACHE_NAME);
-            cache.put('/index.html', networkResponse.clone());
-          }
+          const cache = await caches.open(CACHE_NAME);
+          cache.put('/index.html', networkResponse.clone());
           return networkResponse;
         } catch (error) {
           console.warn('[SW] Offline mode detected. SPA fallback triggered for:', url.pathname);
-          // Network failed (Offline). Immediately return the cached App Shell (index.html)
-          // The frontend react-router will then parse window.location and mount the correct React view!
           const cache = await caches.open(CACHE_NAME);
-          const cachedResponse = await cache.match('/index.html');
+          const cachedResponse = await cache.match('/index.html') || await cache.match('/');
+          if (cachedResponse) return cachedResponse;
           
-          if (cachedResponse) {
-             return cachedResponse;
-          }
-          // The absolute ultimate fallback incase index.html mapping was lost
-          const ultimateFallback = await cache.match('/');
-          if (ultimateFallback) {
-             return ultimateFallback;
-          }
-          return new Response('Offline App Shell missing', { status: 503, statusText: 'Service Unavailable', headers: { 'Content-Type': 'text/plain' }});
+          return new Response('Offline App Shell missing. Please connect to the internet to load the app.', { 
+            status: 503, 
+            statusText: 'Service Unavailable', 
+            headers: { 'Content-Type': 'text/plain' }
+          });
         }
       })()
     );
-    return; // Escape here. A navigation request MUST end here.
+    return; 
   }
 
-  // Handle all other Assets (CSS, JS modules, Images, Fonts) with Stale-While-Revalidate
+  // 3. DYNAMIC ASSETS (Stale-While-Revalidate)
   event.respondWith(
     (async () => {
       const cache = await caches.open(DYNAMIC_CACHE);
       const cachedResponse = await cache.match(event.request);
 
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          // Only cache successful basic or cors requests to avoid busting quota on opaques
-          if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
-             cache.put(event.request, networkResponse.clone());
-          }
-          return networkResponse;
-        })
-        .catch((error) => {
-          if (!cachedResponse) {
-            console.warn(`[SW] Resource completely unavailable offline: ${url.pathname}`);
-          }
-        });
+      const fetchPromise = fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200 && (networkResponse.type === 'basic' || networkResponse.type === 'cors')) {
+           cache.put(event.request, networkResponse.clone());
+        }
+        return networkResponse;
+      }).catch(() => null);
 
-      // Provide the cached response immediately if it exists, meanwhile revalidate exactly what we need
       const finalResponse = cachedResponse || await fetchPromise;
       if (!finalResponse) {
         return new Response('Offline and resource not found in cache.', { status: 503, statusText: 'Service Unavailable' });
@@ -159,7 +130,7 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Background Sync capability to reconnect and upload data
+// 4. IDEMPOTENT OFFLINE/ONLINE DATA SYNC SECURITY
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-henosis-data') {
     event.waitUntil(syncOfflineData());
@@ -180,6 +151,20 @@ function initOfflineDB_SW() {
   });
 }
 
+function validateSyncPayload(request) {
+  // Protect remote DB from null/undefined corrupt overrides
+  if (!request || !request.payload) return false;
+  const { data } = request.payload;
+  
+  if (typeof data !== 'object' || data === null) return false;
+  
+  // Prevent destructive overrides of essential user fields
+  if (data.hasOwnProperty('role') && !data.role) return false;
+  if (data.hasOwnProperty('xp') && (data.xp === null || data.xp < 0)) return false;
+  
+  return true;
+}
+
 async function getPendingRequests_SW() {
   const db = await initOfflineDB_SW();
   return new Promise((resolve, reject) => {
@@ -192,6 +177,7 @@ async function getPendingRequests_SW() {
 }
 
 async function clearPendingRequests_SW(ids) {
+  if (!ids || ids.length === 0) return;
   const db = await initOfflineDB_SW();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['pending_sync'], 'readwrite');
@@ -207,28 +193,50 @@ async function syncOfflineData() {
     const requests = await getPendingRequests_SW();
     if (!requests || requests.length === 0) return;
 
-    console.log(`[SW Background Sync] Khởi động đồng bộ ${requests.length} requests...`);
+    // Filter out corrupted validation fails immediately to prevent loop blockages
+    const validRequests = [];
+    const invalidIds = [];
+
+    requests.forEach(req => {
+      if (validateSyncPayload(req)) {
+        validRequests.push(req);
+      } else {
+        invalidIds.push(req.id);
+      }
+    });
+
+    // Clear corrupted requests so they don't block the queue
+    if (invalidIds.length > 0) {
+      console.warn(`[SW Background Sync] Dropping ${invalidIds.length} corrupted sync payloads.`);
+      await clearPendingRequests_SW(invalidIds);
+    }
+
+    if (validRequests.length === 0) return;
+
+    console.log(`[SW Background Sync] Khởi động đồng bộ ${validRequests.length} requests hợp lệ...`);
     
+    // Safely execute API call using standard fetch
     const response = await fetch('/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ requests })
+      body: JSON.stringify({ requests: validRequests })
     });
 
     if (response.ok) {
       const data = await response.json();
       if(data.success && data.processedIds) {
           await clearPendingRequests_SW(data.processedIds);
-          console.log(`[SW Background Sync] Đã đồng bộ ${data.processedIds.length} requests lên máy chủ!`);
+          console.log(`[SW Background Sync] Đã đồng bộ ${data.processedIds.length} payloads lên máy chủ!`);
       } else {
-          const ids = requests.map(r => r.id);
+          // Assume the backend manually accepted/rejected them; clear to avoid infinite sync loops
+          const ids = validRequests.map(r => r.id);
           await clearPendingRequests_SW(ids);
       }
     } else {
       throw new Error(`Máy chủ từ chối lúc đồng bộ, trạng thái: ${response.status}`);
     }
   } catch (error) {
-    console.error('[SW Background Sync] Thất bại, sẽ tự thử lại lần sau:', error);
+    console.error('[SW Background Sync] Thất bại mạng, sẽ tự thử lại khi có kết nối:', error);
     throw error;
   }
 }
