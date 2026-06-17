@@ -1,0 +1,160 @@
+50:    if (Array.isArray(parsed)) return parsed;
+54:          return parsed[key];
+68:      if (Array.isArray(parsed)) return parsed;
+82:          return parsed[key];
+95:  return (
+109:  if (cooldownRemaining <= 0) return null;
+110:  return <span>Cooldown: {cooldownRemaining}s</span>;
+125:    return animation.stop;
+128:  return <motion.span>{rounded}</motion.span>;
+184:    return (
+196:  return null;
+262:    return (sessionStorage.getItem('student_dashboard_tab') as any) || "study";
+280:    return () => unsub();
+290:    return new Promise((resolve, reject) => {
+325:    return (sessionStorage.getItem("student_viewMode") as "recent" | "all") || "recent";
+340:      return saved === "true";
+342:    return false;
+351:    return saved ? parseInt(saved, 10) : 16;
+356:    return (saved === "compact" || saved === "comfortable") ? saved : "comfortable";
+374:    return () => {
+391:    return () => {
+436:    return () => unsubscribe();
+474:    return Array.from(subjectsSet);
+481:    if (!currentFront.trim() || !currentBack.trim()) return;
+494:      return;
+498:      return;
+543:        return;
+557:        return;
+584:    if (!user) return;
+625:               return false;
+627:            return prev;
+634:    return () => {
+646:    if (!user) return;
+663:    return () => {
+674:    if (rawDecks.length === 0) return store.getDecks();
+681:    return rawDecks.map((deck) => {
+687:            return {
+699:          return card;
+702:      return clonedDeck;
+719:    if (!user || localDecks.length === 0) return;
+749:    if (!user) return;
+786:    return () => {
+798:    return () => {};
+803:    return dbUsers.length > 0
+807:          return {
+823:          return isTargetRole && isValidUser && (roleLower === "admin" || roleLower === "teacher" || hasPoints);
+830:            return {
+845:            return isTargetRole && isValidUser && (roleLower === "admin" || roleLower === "teacher" || hasPoints);
+856:     if (sortedUsers.length === 0) return;
+877:        return;
+881:         return;
+900:         return newTrends;
+944:    if (!studentToDelete) return;
+965:    if (!user) return { hours: 0, minutes: 0 };
+967:    if (!history || history.length === 0) return { hours: 0, minutes: 0 };
+990:    return {
+1012:    return () => window.removeEventListener("focus", fetchReminders);
+1017:    return allCards.filter(c => c.isHard === true || remindLaterCardIds.includes(c.id));
+1027:    if (cardsToStudy.length === 0) return;
+1046:    if (hardCards.length === 0) return;
+1064:    if (allCards.length === 0) return;
+1102:      return saved ? parseInt(saved, 10) : 20;
+1104:    return 20;
+1114:    return () => window.removeEventListener("henosis-data-synced", handleSyncEvent);
+1133:    return acc + (deck.cards || []).filter(c => c.nextReview && c.nextReview <= Date.now()).length;
+1138:    if (decksWithCards.length === 0) return null;
+1140:    return decksWithCards.reduce((lowest, current) => {
+1144:      return currentAvg < lowestAvg ? current : lowest;
+1153:        return;
+1158:        return;
+1285:             if (weakIds.includes(c.id)) return true;
+1287:             if (c.isNewCard === true || c.isNewCard === undefined && c.mastery === 0 && (c.repetitionCount === undefined || c.repetitionCount === 0)) return false;
+1288:             return c.mastery < 50;
+1300:        return;
+1366:               return q;
+1392:        return;
+1452:               return q;
+1477:    if (q.correctAnswerIndex !== undefined) return q.correctAnswerIndex;
+1478:    if (q.correctIndex !== undefined) return q.correctIndex;
+1481:        if (charCode >= 65 && charCode <= 68) return charCode - 65; // A=0, B=1...
+1483:    return 0; // fallback
+1487:    if (isAnswerRevealed) return;
+1517:          return;
+1543:       return Array.from({length: 15}).map((_, i) => ({
+1548:       return Array.from({length: 10}).map((_, i) => ({
+1553:       return [
+1567:     return Array.from({length: 30}).map((_, i) => ({
+1576:      return (
+1588:    return null;
+1633:  if (!user) return <DashboardSkeleton />;
+1634:  if (isInitialLoading) return <DashboardSkeleton />;
+1636:  return (
+1797:          return (
+1917:                             return (
+1994:                          return (
+2222:                    if (c.isHard) return true;
+2223:                    if (c.isNewCard === true || c.isNewCard === undefined && c.mastery === 0 && (c.repetitionCount === undefined || c.repetitionCount === 0)) return false;
+2224:                    return (c.mastery || 0) < 50;
+2238:              return (
+2773:                    if (!u) return null;
+2780:                    return (
+2865:                      return (
+3138:                      return;
+3142:                      return;
+3144:                    if (!confirm(`Xác nhận đánh đổi ${currentFreezeCost} Tinh Hoa lấy Tấm Khiên Aegis (Bảo Vệ Streak)?`)) return;
+3186:                      return;
+3188:                    if (!confirm(`Xác nhận đánh đổi 150 Tinh Hoa lấy Mật Hoa Ambrosia (+50 XP)?`)) return;
+3217:                    return;
+3262:                    return;
+3320:                      return;
+3322:                    if (!confirm(`Xác nhận đánh đổi 200 Tinh Hoa để lập tức thăng 1 cấp độ?`)) return;
+3364:                      return;
+3368:                      return;
+3370:                    if (!confirm(`Xác nhận đánh đổi 500 Tinh Hoa để sở hữu Hào Quang Olympus (Khung Kim Cương)?`)) return;
+3429:                      return;
+3433:                      return;
+3435:                    if (!confirm(`Xác nhận đánh đổi 300 Tinh Hoa để sở hữu Phong Hiệu 'Học Giả Bách Khoa'?`)) return;
+3493:                      return;
+3497:                      return;
+3499:                    if (!confirm("Xác nhận đánh đổi 50 Tinh Hoa để sở hữu biểu tượng Trái Tim Sư Tử?")) return;
+3555:                      return;
+3557:                    if (!confirm("Xác nhận đánh đổi 50 Tinh Hoa để mở hộp Pandora bí ẩn?")) return;
+3613:                       return;
+3684:                          return;
+3823:                      return;
+3827:                      return;
+3829:                    if (!confirm("Ngài có chắc chắn muốn mua danh hiệu Quân Vương Triết Học không?")) return;
+3886:                      return;
+3890:                      return;
+3892:                    if (!confirm(`Mua danh hiệu ${titleName} với giá ${price} Tinh Hoa?`)) return;
+3940:                      return;
+3944:                      return;
+3946:                    if (!confirm(`Mua danh hiệu ${titleName} với giá ${price} Tinh Hoa?`)) return;
+3994:                      return;
+3998:                      return;
+4000:                    if (!confirm(`Mua danh hiệu ${titleName} với giá ${price} Tinh Hoa?`)) return;
+4049:                      return;
+4053:                      return;
+4055:                    if (!confirm(`Mua danh hiệu ${titleName} với giá ${price} Tinh Hoa?`)) return;
+4107:                      return;
+4109:                    if (!confirm("Xác nhận chiết xuất 100 Tinh Hoa để sạc thêm năng lượng (1 Lượt) cho United Engine?")) return;
+4172:                      return;
+4176:                      return;
+4178:                    if (!confirm("Xác nhận đổi 60 Tinh Hoa để nhận trạng thái x2 XP trong 15 phút?")) return;
+4227:                      return;
+4231:                      return;
+4233:                    if (!confirm("Xác nhận đổi 50 Tinh Hoa để tàng hình trên Leaderboard trong 24 giờ?")) return;
+4276:                      return;
+4280:                      return;
+4282:                    if (!confirm("Một sự đánh đổi khủng khiếp. Xác nhận lấy Quyền Trượng Đấng Toàn Năng?")) return;
+4356:              return (
+4395:                          if (!file) return;
+4428:                                    if (!profileNameInput.trim()) return;
+4538:                          return (
+5249:                       return (
+5611:                   return (
+5650:                       return;
+5654:                       return;
+5754:                    return (
+5874:                    return (

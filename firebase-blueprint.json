@@ -1,0 +1,136 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and tracking data",
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["student", "teacher", "admin"],
+          "description": "System role matching access levels"
+        },
+        "points": {
+          "type": "integer",
+          "description": "Weekly ranking score points"
+        },
+        "streak": {
+          "type": "integer",
+          "description": "Consecutive days of study streak"
+        },
+        "lastActiveDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Date format YYYY-MM-DD"
+        },
+        "streakFreeze": {
+          "type": "boolean",
+          "description": "State of protective streak shield"
+        },
+        "lastWeeklyResetWeek": {
+          "type": "string",
+          "description": "ISO week key when points were last reset"
+        }
+      },
+      "required": ["role"]
+    },
+    "Card": {
+      "title": "Flashcard Object",
+      "description": "Single Q-A card properties",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "front": {
+          "type": "string"
+        },
+        "back": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "mastery": {
+          "type": "integer"
+        },
+        "nextReview": {
+          "type": "integer"
+        },
+        "isHard": {
+          "type": "boolean"
+        }
+      },
+      "required": ["id", "front", "back"]
+    },
+    "Set": {
+      "title": "Study Set (Deck)",
+      "description": "A collection containing a list of study flashcards",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "cards": {
+          "type": "array"
+        }
+      },
+      "required": ["id", "title", "cards"]
+    },
+    "Group": {
+      "title": "Study Group",
+      "description": "Learning circle for social interaction",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "members": {
+          "type": "array"
+        }
+      },
+      "required": ["name"]
+    },
+    "Resource": {
+      "title": "Shared Resource",
+      "description": "Extracted PDFs or drive references",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "driveUrl": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "driveUrl"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Profiles storing core user preferences and role validation"
+    },
+    "/sets/{setId}": {
+      "schema": "Set",
+      "description": "Study decks containing arrays of Flashcards"
+    },
+    "/groups/{groupId}": {
+      "schema": "Group",
+      "description": "Classroom or independent study circles"
+    },
+    "/resources/{resourceId}": {
+      "schema": "Resource",
+      "description": "Documents extracted for pipeline referencing"
+    }
+  }
+}

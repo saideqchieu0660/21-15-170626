@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1200, initial-scale=1.0, minimum-scale=0.25, maximum-scale=5.0, user-scalable=yes" />
+    <title>Henosis Web</title>
+    <script>
+      window.addEventListener('error', function(e) {
+        // Detect fails on JS module loading (stale index.html pointing to old Vercel chunks)
+        const target = e.target || e.srcElement;
+        const isScript = target && target.tagName === 'SCRIPT';
+        const isCss = target && target.tagName === 'LINK' && target.rel === 'stylesheet';
+        
+        if (isScript || isCss || (e.message && (e.message.includes('dynamically imported') || e.message.includes('fetch dynamically imported')))) {
+          if (!navigator.onLine) {
+            console.warn("[System] Offline detected. Ignoring chunk load error to preserve PWA cache.");
+            return;
+          }
+          console.warn("[System] Detected stale static assets. Purging Service Worker & cache...");
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+              for (let registration of registrations) {
+                registration.unregister();
+              }
+            });
+          }
+          if ('caches' in window) {
+             caches.keys().then(function(names) {
+                for (let name of names) caches.delete(name);
+             });
+          }
+          // Debounce reload to prevent infinite crash loop
+          const lastReloadStr = sessionStorage.getItem("chunk_auto_reload_time");
+          const lastReload = lastReloadStr ? parseInt(lastReloadStr, 10) : 0;
+          if (Date.now() - lastReload > 10000) {
+            sessionStorage.setItem("chunk_auto_reload_time", Date.now().toString());
+            window.location.reload();
+          }
+        }
+      }, true);
+    </script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" integrity="sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+" crossorigin="anonymous">
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+
