@@ -2,7 +2,7 @@ import { Deck } from "../lib/store";
 
 const DB_NAME = "HenosisCoursesDB";
 const STORE_NAME = "offline_courses";
-const DB_VERSION = 2; // Bump version for schema change
+const DB_VERSION = 3; // Bump version for schema change
 
 export function initDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -19,10 +19,12 @@ export function initDb(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event: any) => {
       const db = event.target.result;
-      if (db.objectStoreNames.contains(STORE_NAME)) {
-        db.deleteObjectStore(STORE_NAME);
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "courseId" });
       }
-      db.createObjectStore(STORE_NAME, { keyPath: "courseId" });
+      if (!db.objectStoreNames.contains("user_profile_meta")) {
+        db.createObjectStore("user_profile_meta", { keyPath: "userId" });
+      }
     };
   });
 }
@@ -182,4 +184,35 @@ export async function getAllOfflineDecks(): Promise<Deck[]> {
 export async function isDeckSavedOffline(deckId: string): Promise<boolean> {
   const deck = await getOfflineDeck(deckId);
   return deck !== null && deck.isAvailableOffline === true;
+}
+
+export async function saveProfileMetaOffline(userId: string, profileMeta: any): Promise<void> {
+  try {
+    const db = await initDb();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction("user_profile_meta", "readwrite");
+      const storeObj = transaction.objectStore("user_profile_meta");
+      const request = storeObj.put({ ...profileMeta, userId });
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.warn("Failed to write to IndexedDB profile meta:", e);
+  }
+}
+
+export async function getProfileMetaOffline(userId: string): Promise<any | null> {
+  try {
+    const db = await initDb();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction("user_profile_meta", "readonly");
+      const storeObj = transaction.objectStore("user_profile_meta");
+      const request = storeObj.get(userId);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.warn("Failed to read from IndexedDB profile meta:", e);
+    return null;
+  }
 }

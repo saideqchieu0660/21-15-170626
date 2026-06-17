@@ -303,7 +303,9 @@ export async function syncUserToFirebase() {
     try {
       // PRE-FLIGHT VALIDATION: Only cache and queue if it's a valid data block
       if (typeof currentUser.points === 'number' && currentUser.role) {
-          localStorage.setItem(`offline_profile_${currentUser.id}`, JSON.stringify(currentUser));
+          import('../utils/offlineDb').then(({ saveProfileMetaOffline }) => {
+            saveProfileMetaOffline(currentUser!.id, currentUser).catch(console.warn);
+          });
       }
       
       const { auth } = await import('./firebase');
@@ -359,9 +361,13 @@ export const store = {
     const name = email.split('@')[0];
     let u = users.find(x => x.name === name);
     if (!u) {
-       const cachedStr = localStorage.getItem(`offline_profile_${firebaseUser.uid}`);
        let cachedU = null;
-       try { if (cachedStr) cachedU = JSON.parse(cachedStr); } catch (e) {}
+       try { 
+         const { getProfileMetaOffline } = await import('../utils/offlineDb');
+         cachedU = await getProfileMetaOffline(firebaseUser.uid);
+       } catch (e) {
+         console.warn("Failed to load cached profile from IndexedDB:", e);
+       }
        
        if (cachedU && cachedU.role) {
            u = { ...cachedU, id: firebaseUser.uid, name };
@@ -381,7 +387,9 @@ export const store = {
         // Lấy profile từ Firestore để đồng bộ role, points, streak, lastActiveDate, streakFreeze
         const profile = await dbService.getUserProfile(firebaseUser.uid);
         if (profile) {
-            localStorage.setItem(`offline_profile_${firebaseUser.uid}`, JSON.stringify(profile));
+            import('../utils/offlineDb').then(({ saveProfileMetaOffline }) => {
+                saveProfileMetaOffline(firebaseUser.uid, profile).catch(console.warn);
+            });
             let sessionRole = profile.role || "student";
             if (sessionRole === "Admin" || sessionRole === "admin") {
                 sessionStorage.setItem('adminToken', 'true');
@@ -626,7 +634,9 @@ export const store = {
       if (idx >= 0) {
         users[idx] = { ...users[idx], ...updates };
       }
-      localStorage.setItem(`offline_profile_${currentUser.id}`, JSON.stringify(currentUser));
+      import('../utils/offlineDb').then(({ saveProfileMetaOffline }) => {
+          saveProfileMetaOffline(currentUser!.id, currentUser).catch(console.warn);
+      });
       if (!skipSync) {
         syncUserToFirebase();
       }
