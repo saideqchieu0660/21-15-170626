@@ -593,8 +593,17 @@ export const store = {
             });
         }
     } catch (e: any) {
-        if (e?.message?.includes('client is offline')) {
-            console.warn("Firebase client is offline: using local state.");
+        if (!navigator.onLine || e?.message?.includes('client is offline') || e?.message?.includes('Failed to load sets from Firestore')) {
+            console.warn("Firebase client is offline: loading offline courses from IndexedDB.");
+            try {
+                const { getAllOfflineDecks } = await import('../utils/offlineDb');
+                const offlineCourses = await getAllOfflineDecks();
+                if (offlineCourses.length > 0) {
+                    decks = offlineCourses;
+                }
+            } catch (err) {
+                console.error("Failed to load offline courses:", err);
+            }
         } else {
             console.error("Failed to hydrate cards state from Firebase:", e);
         }

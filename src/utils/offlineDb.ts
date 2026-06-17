@@ -2,7 +2,7 @@ import { Deck } from "../lib/store";
 
 const DB_NAME = "HenosisCoursesDB";
 const STORE_NAME = "offline_courses";
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Bump version for schema change
 
 export function initDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -19,9 +19,10 @@ export function initDb(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event: any) => {
       const db = event.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      if (db.objectStoreNames.contains(STORE_NAME)) {
+        db.deleteObjectStore(STORE_NAME);
       }
+      db.createObjectStore(STORE_NAME, { keyPath: "courseId" });
     };
   });
 }
@@ -72,6 +73,7 @@ export async function downloadCourseForOffline(courseId: string): Promise<void> 
     
     await saveCourseOffline({
       ...courseData,
+      courseId: courseId,
       isAvailableOffline: true
     });
     console.log(`Course ${courseId} downloaded for offline use.`);
@@ -88,6 +90,7 @@ export async function saveCourseOffline(course: any): Promise<void> {
     const storeObj = transaction.objectStore(STORE_NAME);
     const data = {
       ...course,
+      courseId: course.courseId || course.id,
       downloadedAt: new Date().toISOString(),
     };
     const request = storeObj.put(data);
@@ -131,7 +134,11 @@ export async function getOfflineDeck(deckId: string): Promise<Deck | null> {
       const request = storeObj.get(deckId);
 
       request.onsuccess = () => {
-        resolve(request.result || null);
+        const item = request.result || null;
+        if (item) {
+          item.id = item.courseId || item.id;
+        }
+        resolve(item);
       };
 
       request.onerror = () => {
@@ -153,7 +160,13 @@ export async function getAllOfflineDecks(): Promise<Deck[]> {
       const request = storeObj.getAll();
 
       request.onsuccess = () => {
-        resolve(request.result || []);
+        const results = request.result || [];
+        const filtered = results.filter((item: any) => item.isAvailableOffline === true);
+        const standardized = filtered.map((item: any) => ({
+          ...item,
+          id: item.courseId || item.id
+        }));
+        resolve(standardized);
       };
 
       request.onerror = () => {
