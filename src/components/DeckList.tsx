@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'motion/react';
-import { Play, BookOpen, Search, X, ChevronLeft, ChevronRight, Sparkles, Pin, PinOff, Clock, Check, Share2, Edit3 } from 'lucide-react';
+import { Play, BookOpen, Search, X, ChevronLeft, ChevronRight, Sparkles, Pin, PinOff, Clock, Check, Share2, Edit3, DownloadCloud } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { Deck, store } from '../lib/store';
 import { useTheme } from '../components/ThemeProvider';
 import { cn } from '../lib/utils';
+import { downloadCourseForOffline, isDeckSavedOffline, getAllOfflineDecks } from '../utils/offlineDb';
 
 interface DeckListProps {
   decks: Deck[];
@@ -85,6 +86,51 @@ export const DeckList = ({ decks, showSearch = true, groupBySubject = false, onC
     return saved ? JSON.parse(saved) : [];
   });
   
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlineDeckIds, setOfflineDeckIds] = useState<Set<string>>(new Set());
+  const [downloadingDecks, setDownloadingDecks] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    getAllOfflineDecks().then(offlineDecks => {
+      setOfflineDeckIds(new Set(offlineDecks.filter(d => (d as any).isAvailableOffline).map(d => d.id)));
+    });
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const handleDownloadOffline = async (e: React.MouseEvent, deckId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (downloadingDecks.has(deckId)) return;
+
+    try {
+      setDownloadingDecks(prev => new Set(prev).add(deckId));
+      await downloadCourseForOffline(deckId);
+      toast.success("Đã tải xuống khóa học để dùng offline.");
+      setOfflineDeckIds(prev => {
+        const next = new Set(prev);
+        next.add(deckId);
+        return next;
+      });
+    } catch (err) {
+      toast.error("Lỗi khi tải xuống: " + (err as Error).message);
+    } finally {
+      setDownloadingDecks(prev => {
+        const next = new Set(prev);
+        next.delete(deckId);
+        return next;
+      });
+    }
+  };
+
 const safeSetItem = (key: string, value: string) => {
     try {
       localStorage.setItem(key, value);
@@ -526,10 +572,31 @@ const safeSetItem = (key: string, value: string) => {
                           return acc + 60;
                       }, 0);
                       const estimatedMinutes = Math.ceil(estimatedSeconds / 60);
+                      
+                      const isOfflineUnavailable = !isOnline && !offlineDeckIds.has(deck.id);
 
                       return (
-                        <TiltCard key={deck.id} delayIdx={idx} className="w-[85vw] sm:w-[380px] shrink-0 snap-start h-auto">
+                        <TiltCard key={deck.id} delayIdx={idx} className={cn("w-[85vw] sm:w-[380px] shrink-0 snap-start h-auto", isOfflineUnavailable && "opacity-40 grayscale pointer-events-none")}>
                           <div className="absolute top-4 right-4 z-20 flex gap-2">
+                            {isOfflineUnavailable && (
+                               <div className="px-3 py-1.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-black uppercase tracking-wider flex items-center border-2 border-red-500/20 backdrop-blur-md shadow-sm">
+                                  Offline
+                               </div>
+                            )}
+                            {isOnline && !offlineDeckIds.has(deck.id) && (
+                               <button
+                                 onClick={(e) => handleDownloadOffline(e, deck.id)}
+                                 className="p-2 rounded-full transition-colors bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border-2 border-transparent hover:border-emerald-500/30"
+                                 title="Tải xuống để học Offline"
+                               >
+                                 {downloadingDecks.has(deck.id) ? <Check className="w-5 h-5 animate-pulse" /> : <DownloadCloud className="w-5 h-5" />}
+                               </button>
+                            )}
+                            {offlineDeckIds.has(deck.id) && (
+                               <div className="p-2 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400" title="Đã có thể học offline">
+                                 <Check className="w-5 h-5" />
+                               </div>
+                            )}
                             {onEditDeck && (isAdmin || deck.createdBy === currentUser?.id) && (
                               <button
                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEditDeck(deck); }}
@@ -607,10 +674,31 @@ const safeSetItem = (key: string, value: string) => {
                 }, 0);
                 const estimatedMinutes = Math.ceil(estimatedSeconds / 60);
 
+                const isOfflineUnavailable = !isOnline && !offlineDeckIds.has(deck.id);
+
                 return (
-                  <TiltCard key={deck.id} delayIdx={idx}>
+                  <TiltCard key={deck.id} delayIdx={idx} className={cn("", isOfflineUnavailable && "opacity-40 grayscale pointer-events-none")}>
                     {/* Animated gradient border pseudo-element effect already handled by .card-3d layer logic */}
                     <div className="absolute top-4 right-4 z-20 flex gap-2">
+                            {isOfflineUnavailable && (
+                               <div className="px-3 py-1.5 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-black uppercase tracking-wider flex items-center border-2 border-red-500/20 backdrop-blur-md shadow-sm">
+                                  Offline
+                               </div>
+                            )}
+                            {isOnline && !offlineDeckIds.has(deck.id) && (
+                               <button
+                                 onClick={(e) => handleDownloadOffline(e, deck.id)}
+                                 className="p-2 rounded-full transition-colors bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border-2 border-transparent hover:border-emerald-500/30"
+                                 title="Tải xuống để học Offline"
+                               >
+                                 {downloadingDecks.has(deck.id) ? <Check className="w-5 h-5 animate-pulse" /> : <DownloadCloud className="w-5 h-5" />}
+                               </button>
+                            )}
+                            {offlineDeckIds.has(deck.id) && (
+                               <div className="p-2 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400" title="Đã có thể học offline">
+                                 <Check className="w-5 h-5" />
+                               </div>
+                            )}
                       {onEditDeck && (isAdmin || deck.createdBy === currentUser?.id) && (
                         <button
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEditDeck(deck); }}

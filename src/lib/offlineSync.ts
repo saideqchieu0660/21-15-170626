@@ -2,7 +2,7 @@ import { dbService } from "./firebase";
 
 export interface SyncItem {
   id: string;
-  type: "cardState" | "userProfile";
+  type: "cardState" | "userProfile" | "pointsDelta";
   uid: string;
   payload: any;
   cardId?: string; // only for cardState
@@ -66,6 +66,28 @@ export const OfflineSyncQueue = {
     this.processQueue();
   },
 
+  // Enqueue incremental points accumulation
+  enqueuePointsDelta(uid: string, deltaPoints: number) {
+     if (!uid || deltaPoints === 0) return;
+     const queue = getQueue();
+     
+     const existingIndex = queue.findIndex(i => i.type === "pointsDelta" && i.uid === uid);
+     if (existingIndex > -1) {
+         queue[existingIndex].payload.delta += deltaPoints;
+         queue[existingIndex].timestamp = Date.now();
+     } else {
+         queue.push({
+             id: `sync_points_${uid}_${Date.now()}`,
+             type: "pointsDelta",
+             uid,
+             payload: { delta: deltaPoints },
+             timestamp: Date.now()
+         });
+     }
+     saveQueue(queue);
+     this.processQueue();
+  },
+
   // Enqueue a user profile sync
   enqueueUserProfile(uid: string, profileData: any) {
     if (!uid) return;
@@ -123,6 +145,13 @@ export const OfflineSyncQueue = {
       try {
         if (item.type === "cardState") {
           await dbService.setCardState(item.uid, item.cardId!, item.payload);
+        } else if (item.type === "pointsDelta") {
+          const { updateDoc, doc, increment } = await import("firebase/firestore");
+          const { db } = await import("./firebase");
+          const userRef = doc(db, "users", item.uid);
+          await updateDoc(userRef, {
+            points: increment(item.payload.delta)
+          });
         } else if (item.type === "userProfile") {
           const payload = item.payload;
           

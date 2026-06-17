@@ -565,12 +565,6 @@ export const store = {
             });
             if (fbDecks.length > 0) {
                 decks = fbDecks;
-                try {
-                  const { saveDeckOffline } = await import('../utils/offlineDb');
-                  for (const d of fbDecks) {
-                    await saveDeckOffline(d).catch(e => console.warn("Hydrate IndexedDB fail:", e));
-                  }
-                } catch(e) {}
             }
         } catch (setErr) {
             console.error("Failed to load sets from Firestore, fallback to static decks", setErr);
@@ -950,6 +944,9 @@ export const store = {
              if (canEarnPoints) {
                  currentUser.points += multiplier;
                  card.lastPointAwarded = Date.now();
+                 import('./offlineSync').then(({ OfflineSyncQueue }) => {
+                    OfflineSyncQueue.enqueuePointsDelta(currentUser!.id, multiplier);
+                 }).catch(e => console.error("OfflineSync Points enqueue error:", e));
              }
          }
      } else {
@@ -960,8 +957,14 @@ export const store = {
          if (currentUser && currentUser.achillesUntil && currentUser.achillesUntil > Date.now()) {
              if (currentUser.streak && currentUser.streak > 1) {
                  currentUser.streak = 1;
+                 import('./offlineSync').then(({ OfflineSyncQueue }) => {
+                    OfflineSyncQueue.enqueueUserProfile(currentUser!.id, { streak: 1 });
+                 });
              } else if (currentUser.level && currentUser.level > 1) {
                  currentUser.level -= 1;
+                 import('./offlineSync').then(({ OfflineSyncQueue }) => {
+                    OfflineSyncQueue.enqueueUserProfile(currentUser!.id, { level: currentUser!.level });
+                 });
              }
          }
      }
@@ -999,7 +1002,7 @@ export const store = {
              const today = new Date().toISOString().split('T')[0];
              const key = `daily_reviewed_${currentUser.id}_${today}`;
              const currentReviewed = parseInt(localStorage.getItem(key) || "0", 10);
-             localStorage.setItem(key, (currentReviewed + 1).toString()); syncUserToFirebase();
+             localStorage.setItem(key, (currentReviewed + 1).toString());
 
              reviewHistory.push({
                id: uuidv4(),
