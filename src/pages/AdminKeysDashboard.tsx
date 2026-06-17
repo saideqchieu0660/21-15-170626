@@ -85,7 +85,10 @@ interface RotationLog {
   reason: string;
 }
 
-export function ServiceMonitor({ adminKey }: { adminKey: string }) {
+let adminTelemetryIntervalHealth: NodeJS.Timeout | null = null;
+let adminTelemetryIntervalKeys: NodeJS.Timeout | null = null;
+
+export function ServiceMonitor({ adminKey, isOpen = true }: { adminKey: string, isOpen?: boolean }) {
   const [keys, setKeys] = useState<KeyState[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalKeys, setTotalKeys] = useState(0);
@@ -152,6 +155,7 @@ export function ServiceMonitor({ adminKey }: { adminKey: string }) {
   const [testResponse, setTestResponse] = useState<any>(null);
 
   const fetchServerHealth = async () => {
+    if (!isOpen) return; // Strict gating: Telemetry dormant unless modal open
     try {
       const res = await fetch("/api/system/health");
       const data = await res.json();
@@ -391,22 +395,29 @@ export function ServiceMonitor({ adminKey }: { adminKey: string }) {
   }, [networkLogs]);
 
   useEffect(() => {
+    if (!isOpen) return;
     fetchServerHealth();
     NetworkHealthMonitor.init();
     setNetworkLogs(NetworkHealthMonitor.getLogs());
 
-    const hInterval = setInterval(() => {
+    if (adminTelemetryIntervalHealth) clearInterval(adminTelemetryIntervalHealth);
+    adminTelemetryIntervalHealth = setInterval(() => {
+      if (!isOpen) return;
       fetchServerHealth();
       setNetworkLogs(NetworkHealthMonitor.getLogs());
-    }, 15000);
+    }, 10000);
 
     return () => {
-      clearInterval(hInterval);
+      if (adminTelemetryIntervalHealth) {
+        clearInterval(adminTelemetryIntervalHealth);
+        adminTelemetryIntervalHealth = null;
+      }
       NetworkHealthMonitor.cleanup();
     };
-  }, []);
+  }, [isOpen]);
 
   const fetchKeysStatus = async () => {
+    if (!isOpen) return; // Strict gating: Telemetry dormant unless modal open
     try {
       const { auth } = await import("../lib/firebase");
       
@@ -535,34 +546,46 @@ export function ServiceMonitor({ adminKey }: { adminKey: string }) {
   };
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    if (!isOpen) {
+      if (adminTelemetryIntervalKeys) {
+        clearInterval(adminTelemetryIntervalKeys);
+        adminTelemetryIntervalKeys = null;
+      }
+      return;
+    }
     
     // Initial fetch always
     fetchKeysStatus();
 
     // Prevent polling if tab is hidden to save Vercel CPU time
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        if (isPolling) {
+      if (document.visibilityState === 'visible' && isPolling && isOpen) {
           fetchKeysStatus();
-          interval = setInterval(fetchKeysStatus, 15000); // Slower polling (15s instead of 5s)
-        }
+          if (adminTelemetryIntervalKeys) clearInterval(adminTelemetryIntervalKeys);
+          adminTelemetryIntervalKeys = setInterval(fetchKeysStatus, 10000); // Slower polling: 10s
       } else {
-        clearInterval(interval);
+        if (adminTelemetryIntervalKeys) {
+          clearInterval(adminTelemetryIntervalKeys);
+          adminTelemetryIntervalKeys = null;
+        }
       }
     };
 
     if (isPolling && document.visibilityState === 'visible') {
-      interval = setInterval(fetchKeysStatus, 15000); // Slower polling (15s instead of 5s)
+      if (adminTelemetryIntervalKeys) clearInterval(adminTelemetryIntervalKeys);
+      adminTelemetryIntervalKeys = setInterval(fetchKeysStatus, 10000); // Slower polling: 10s
     }
     
     document.addEventListener("visibilitychange", handleVisibilityChange);
     
     return () => {
-      clearInterval(interval);
+      if (adminTelemetryIntervalKeys) {
+        clearInterval(adminTelemetryIntervalKeys);
+        adminTelemetryIntervalKeys = null;
+      }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [adminKey, isPolling]);
+  }, [adminKey, isPolling, isOpen]);
 
   useEffect(() => {
     let animationFrameId: number;
@@ -674,7 +697,10 @@ export function ServiceMonitor({ adminKey }: { adminKey: string }) {
                 {isPolling ? 'Stop Polling' : 'Start Polling'}
               </button>
               <button 
-                onClick={fetchKeysStatus}
+                onClick={() => {
+                  fetchKeysStatus();
+                  fetchServerHealth();
+                }}
                 className="btn-3d px-4 py-2 bg-zinc-200 dark:bg-zinc-800 rounded-lg hover:bg-zinc-300 dark:hover:bg-zinc-700 text-sm font-bold animate-shimmer"
               >
                 Refresh
@@ -1792,7 +1818,7 @@ export default function AdminKeysDashboard() {
             
             <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
               <div className="space-y-8 pb-10">
-                <ServiceMonitor adminKey={adminKey} />
+                <ServiceMonitor adminKey={adminKey} isOpen={isCommandCenterOpen} />
                 <div className="border-t border-zinc-200 dark:border-zinc-800 pt-8 mt-8">
                   <AIPromptsEditorWidget />
                 </div>
