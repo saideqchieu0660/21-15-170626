@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { store, Flashcard, Deck } from "../lib/store";
+import localforage from "localforage";
+import { getOfflineDeck, saveDeckOffline, deleteOfflineDeck, isDeckSavedOffline } from '../utils/offlineDb';
 import {
   Check,
   X,
@@ -261,13 +263,11 @@ export default function StudyRoom() {
     if (!deckId || !user) return;
 
     // Check offline saved state and load immediately if offline
-    import("../utils/offlineDb").then(({ getOfflineDeck, isDeckSavedOffline }) => {
       isDeckSavedOffline(deckId).then(setIsOfflineSaved);
       
       if (!navigator.onLine) {
         if (deckId === "daily-quest") {
-          import("localforage").then((localforage) => {
-            localforage.default.getItem("cached_roadmap").then((cachedRoadmap) => {
+          localforage.getItem("cached_roadmap").then((cachedRoadmap) => {
               if (cachedRoadmap && Array.isArray(cachedRoadmap)) {
                 toast("Mạng ngoại tuyến, hiển thị lộ trình tuyến Offline PWA.");
                 const dailyDeck = {
@@ -287,7 +287,6 @@ export default function StudyRoom() {
               }
               setIsLoading(false);
             });
-          });
         } else {
           getOfflineDeck(deckId).then((offlineDeck) => {
             if (offlineDeck) {
@@ -300,7 +299,6 @@ export default function StudyRoom() {
           });
         }
       }
-    });
 
     if (!navigator.onLine) {
       return;
@@ -316,8 +314,7 @@ export default function StudyRoom() {
         // Auto-generate daily-quest
         const buildDailyQuest = async () => {
           try {
-            const safeRequest = (await import("../utils/apiClient"))
-              .safeRequest;
+            const safeRequest = (await import("../utils/apiClient")).safeRequest;
             const { getDocs, collection } = await import("firebase/firestore");
 
             const snapshot = await getDocs(collection(db, "sets"));
@@ -366,7 +363,6 @@ export default function StudyRoom() {
             }
             
             // CACHE ROADMAP
-            const localforage = (await import("localforage")).default;
             await localforage.setItem("cached_roadmap", reqData.cards).catch(console.warn);
 
             const dailyDeck = {
@@ -389,7 +385,6 @@ export default function StudyRoom() {
             
             // Fallback on Catch: If network failed unexpectedly during fetch
             try {
-              const localforage = (await import("localforage")).default;
               const cachedRoadmap = await localforage.getItem("cached_roadmap");
               if (cachedRoadmap && Array.isArray(cachedRoadmap)) {
                   toast("Mạng không ổn định. Kích hoạt dự phòng lộ trình Offline.");
@@ -443,28 +438,24 @@ export default function StudyRoom() {
                     store.setTempDeck(fetchedData);
                   } else {
                     // Fallback to IndexedDB if document does not exist
-                    import("../utils/offlineDb").then(({ getOfflineDeck }) => {
-                      getOfflineDeck(deckId).then((offlineDeck) => {
-                        if (offlineDeck) {
-                          setRawDeck(offlineDeck);
+                    getOfflineDeck(deckId).then((offlineDeck) => {
+                      if (offlineDeck) {
+                        setRawDeck(offlineDeck);
                           store.setTempDeck(offlineDeck);
                           setIsOfflineSaved(true);
                         }
                       });
-                    });
                   }
                   setIsLoading(false);
                 }, (err) => {
                   console.error("onSnapshot failed, falling back to IndexedDB database:", err);
-                  import("../utils/offlineDb").then(({ getOfflineDeck }) => {
-                    getOfflineDeck(deckId).then((offlineDeck) => {
-                      if (offlineDeck) {
-                        setRawDeck(offlineDeck);
-                        store.setTempDeck(offlineDeck);
-                        setIsOfflineSaved(true);
-                      }
-                      setIsLoading(false);
-                    });
+                  getOfflineDeck(deckId).then((offlineDeck) => {
+                    if (offlineDeck) {
+                      setRawDeck(offlineDeck);
+                      store.setTempDeck(offlineDeck);
+                      setIsOfflineSaved(true);
+                    }
+                    setIsLoading(false);
                   });
                 });
                 unsubDeckRef.current = unsub;
@@ -906,15 +897,12 @@ export default function StudyRoom() {
 
   useEffect(() => {
     if (deck && isOfflineSaved) {
-      import("../utils/offlineDb").then(({ saveDeckOffline }) => {
-        saveDeckOffline(deck).catch(e => console.error("Error backing up updated deck to offline DB:", e));
-      });
+      saveDeckOffline(deck).catch(e => console.error("Error backing up updated deck to offline DB:", e));
     }
   }, [deck, isOfflineSaved]);
 
   const handleToggleOffline = async () => {
     if (!deck) return;
-    const { saveDeckOffline, deleteOfflineDeck } = await import("../utils/offlineDb");
     try {
       if (isOfflineSaved) {
         await deleteOfflineDeck(deck.id);
