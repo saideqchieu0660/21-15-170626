@@ -33,42 +33,6 @@ export default function SetupProfileScreen() {
     }
   }, []);
 
-  const resizeImageAndGetBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const max_size = 96; // 96x96 pixels (extremely compact, under 4KB)
-          let width = img.width;
-          let height = img.height;
-
-          // Crop square to avoid distortion
-          const size = Math.min(width, height);
-          const xOffset = (width - size) / 2;
-          const yOffset = (height - size) / 2;
-
-          canvas.width = max_size;
-          canvas.height = max_size;
-
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, max_size, max_size);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
-            resolve(dataUrl);
-          } else {
-            reject(new Error("Không thể khởi tạo canvas context"));
-          }
-        };
-        img.onerror = () => reject(new Error("Lỗi tải ảnh"));
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = () => reject(new Error("Lỗi đọc file"));
-      reader.readAsDataURL(file);
-    });
-  };
-
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -76,7 +40,51 @@ export default function SetupProfileScreen() {
     try {
       setIsLoading(true);
       setError(null);
-      const compressedBase64 = await resizeImageAndGetBase64(file);
+      
+      const compressedBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (!event.target?.result) {
+            return reject(new Error("Lỗi đọc file (trống)"));
+          }
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              const max_size = 96; // 96x96 pixels (extremely compact, under 4KB)
+              let width = img.width;
+              let height = img.height;
+
+              // Crop square to avoid distortion
+              const size = Math.min(width, height);
+              const xOffset = (width - size) / 2;
+              const yOffset = (height - size) / 2;
+
+              canvas.width = max_size;
+              canvas.height = max_size;
+
+              const ctx = canvas.getContext('2d');
+              if (ctx) {
+                ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, max_size, max_size);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+                resolve(dataUrl);
+              } else {
+                reject(new Error("Không thể khởi tạo canvas context"));
+              }
+            } catch (err) {
+              reject(err);
+            }
+          };
+          img.onerror = () => reject(new Error("Lỗi định dạng ảnh"));
+          img.src = event.target.result as string;
+        };
+        reader.onerror = () => reject(new Error("Lỗi đọc IO file"));
+        try {
+          reader.readAsDataURL(file);
+        } catch (e) {
+          reject(e);
+        }
+      });
       
       const user = auth.currentUser;
       if (user) {
@@ -84,6 +92,7 @@ export default function SetupProfileScreen() {
         const fileRef = ref(storage, `avatars/${user.uid}_${Date.now()}.jpg`);
         await uploadString(fileRef, compressedBase64, 'data_url');
         const downloadUrl = await getDownloadURL(fileRef);
+        if (!downloadUrl) throw new Error("Invalid asset URL returned");
         setPhotoUrl(downloadUrl);
       } else {
         setPhotoUrl(compressedBase64);
@@ -91,6 +100,11 @@ export default function SetupProfileScreen() {
     } catch (err: any) {
       console.error("Lỗi upload avatar:", err);
       setError("Không thể xử lý ảnh này. Vui lòng chọn ảnh khác.");
+      if (auth.currentUser?.photoURL) {
+        setPhotoUrl(auth.currentUser.photoURL);
+      } else {
+        setPhotoUrl("");
+      }
     } finally {
       setIsLoading(false);
     }

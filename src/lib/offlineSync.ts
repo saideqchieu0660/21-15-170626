@@ -156,9 +156,27 @@ export const OfflineSyncQueue = {
           const payload = item.payload;
           
           // 1. DATA PROTECTION GATEWAY (Pre-Flight Check)
-          if (!payload || !payload.name) {
-             console.error(`[OfflineSync] CRITICAL: Blocked empty/corrupted payload upload for user ${item.uid}`);
-             throw new Error("EMPTY_PAYLOAD_PROTECTION");
+          if (!payload || 
+              !payload.name || 
+              !payload.role || 
+              typeof payload.points !== 'number' || 
+              typeof payload.photoURL === 'undefined' || 
+              !Array.isArray(payload.unlockedCustomTitles) || 
+              !Array.isArray(payload.unlockedCustomBorders)) {
+             console.error(`[OfflineSync] CRITICAL: Blocked empty/corrupted payload upload for user ${item.uid}. Enforcing Cloud-First Hydration.`);
+             
+             // Drop the corrupted local queue item to prevent outbound write and overwrite loop
+             const nextQueue = getQueue().filter(i => i.id !== item.id);
+             saveQueue(nextQueue);
+             
+             // Force a downstream re-hydration from cloud to restore local state
+             const { store } = await import("./store");
+             const { auth } = await import("./firebase");
+             if (auth.currentUser) {
+                 await store.setFirebaseUser(auth.currentUser);
+                 window.dispatchEvent(new CustomEvent("henosis-data-synced"));
+             }
+             break;
           }
 
           // 2. STRICT CLOUD-FIRST VALIDATION (Mastery Point Delta Verification)

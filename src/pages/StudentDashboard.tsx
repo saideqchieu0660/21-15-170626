@@ -288,35 +288,46 @@ export default function StudentDashboard() {
   const resizeImageAndGetBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = (event) => {
+        if (!event.target?.result) {
+          return reject(new Error("Lỗi đọc file (trống)"));
+        }
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const max_size = 96;
-          let width = img.width;
-          let height = img.height;
+          try {
+            const canvas = document.createElement('canvas');
+            const max_size = 96;
+            let width = img.width;
+            let height = img.height;
 
-          const size = Math.min(width, height);
-          const xOffset = (width - size) / 2;
-          const yOffset = (height - size) / 2;
+            const size = Math.min(width, height);
+            const xOffset = (width - size) / 2;
+            const yOffset = (height - size) / 2;
 
-          canvas.width = max_size;
-          canvas.height = max_size;
+            canvas.width = max_size;
+            canvas.height = max_size;
 
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, max_size, max_size);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
-            resolve(dataUrl);
-          } else {
-            reject(new Error("Không thể khởi tạo canvas context"));
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, xOffset, yOffset, size, size, 0, 0, max_size, max_size);
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+              resolve(dataUrl);
+            } else {
+              reject(new Error("Không thể khởi tạo canvas context"));
+            }
+          } catch (err) {
+            reject(err);
           }
         };
-        img.onerror = () => reject(new Error("Lỗi tải ảnh"));
-        img.src = e.target?.result as string;
+        img.onerror = () => reject(new Error("Lỗi định dạng ảnh"));
+        img.src = event.target.result as string;
       };
-      reader.onerror = () => reject(new Error("Lỗi đọc file"));
-      reader.readAsDataURL(file);
+      reader.onerror = () => reject(new Error("Lỗi đọc IO file"));
+      try {
+        reader.readAsDataURL(file);
+      } catch (e) {
+        reject(e);
+      }
     });
   };
 

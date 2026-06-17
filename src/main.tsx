@@ -149,6 +149,20 @@ if ('serviceWorker' in navigator) {
     }
   });
 
+  window.addEventListener('henosis-force-hydration', async () => {
+     console.log('🛡️ [App] Kích hoạt quá trình Hydration từ Cloud để khôi phục metadata gốc...');
+     try {
+       const { auth } = await import("./lib/firebase");
+       const { store } = await import("./lib/store");
+       if (auth.currentUser) {
+         await store.setFirebaseUser(auth.currentUser);
+         window.dispatchEvent(new CustomEvent("henosis-data-synced"));
+       }
+     } catch(e) {
+       console.error("Hydration recovery failed:", e);
+     }
+  });
+
   window.addEventListener('offline', () => {
     console.warn('📡 [App] Đã mất kết nối mạng!');
     toast.error('Đang ở chế độ Offline', {

@@ -86,6 +86,35 @@ export const dbService = {
   },
   
   updateUserProfile: async (uid: string, data: any) => {
+    // IDEMPOTENT GUARD: Prevent Profile Wiping
+    // Do not allow wiping of core profile fields with empty or uninitialized data
+    if ("name" in data && (!data.name || data.name.trim() === "")) {
+      console.warn(`[dbService] Blocked empty string for display_name update on user ${uid}.`);
+      delete data.name;
+    }
+    if ("role" in data && !data.role) {
+      console.warn(`[dbService] Blocked empty role down-grade for user ${uid}.`);
+      delete data.role;
+    }
+    if ("photoURL" in data && data.photoURL === "") {
+      console.warn(`[dbService] Blocked empty avatar for user ${uid}.`);
+      delete data.photoURL;
+    }
+    if ("points" in data && (typeof data.points !== "number" || isNaN(data.points))) {
+      console.warn(`[dbService] Blocked NaN/invalid mastery_points for user ${uid}.`);
+      delete data.points;
+    }
+    
+    // If the entire payload was stripped because it was invalid/empty, abort immediately
+    if (Object.keys(data).length === 0) {
+       console.error(`[dbService] CRITICAL: update payload for ${uid} is entirely empty or corrupted. Aborting outbound transaction.`);
+       // Emit an event to force "Cloud-First Hydration" in the frontend
+       if (typeof window !== 'undefined') {
+         window.dispatchEvent(new CustomEvent("henosis-force-hydration"));
+       }
+       return;
+    }
+
     const docRef = doc(db, `users/${uid}`);
     await setDoc(docRef, data, { merge: true });
   },
